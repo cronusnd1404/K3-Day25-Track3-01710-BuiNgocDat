@@ -4,10 +4,17 @@ These tests are marked @pytest.mark.todo and @pytest.mark.xfail.
 They will FAIL until students implement the TODOs — that's by design.
 When all xfail tests unexpectedly PASS, the lab is complete.
 """
+import os
+import tempfile
+import time
+
 import pytest
 
 from reliability_lab.cache import ResponseCache
-from reliability_lab.circuit_breaker import CircuitBreaker, CircuitOpenError, CircuitState
+from reliability_lab.circuit_breaker import CircuitBreaker, CircuitState
+from reliability_lab.gateway import ReliabilityGateway
+from reliability_lab.metrics import RunMetrics
+from reliability_lab.providers import FakeLLMProvider
 
 
 @pytest.mark.todo
@@ -43,7 +50,6 @@ def test_circuit_breaker_denies_when_open() -> None:
     cb = CircuitBreaker("test", failure_threshold=1, reset_timeout_seconds=10)
     cb.state = CircuitState.OPEN
     cb.opened_at = 0.0  # opened long ago but timeout is 10s
-    import time
     cb.opened_at = time.monotonic()  # opened just now
     assert not cb.allow_request(), "OPEN circuit should deny requests before timeout"
 
@@ -61,8 +67,6 @@ def test_half_open_failure_gives_probe_failure_reason() -> None:
 @pytest.mark.todo
 @pytest.mark.xfail(reason="Students must implement ReliabilityGateway.complete()")
 def test_gateway_routes_through_providers() -> None:
-    from reliability_lab.gateway import ReliabilityGateway
-    from reliability_lab.providers import FakeLLMProvider
     provider = FakeLLMProvider("p", fail_rate=0.0, base_latency_ms=1, cost_per_1k_tokens=0.001)
     breaker = CircuitBreaker("p", failure_threshold=3, reset_timeout_seconds=1)
     gw = ReliabilityGateway([provider], {"p": breaker})
@@ -74,12 +78,11 @@ def test_gateway_routes_through_providers() -> None:
 @pytest.mark.todo
 @pytest.mark.xfail(reason="Students must implement metrics.write_csv()")
 def test_metrics_csv_export() -> None:
-    from reliability_lab.metrics import RunMetrics
-    import tempfile, os
     m = RunMetrics(total_requests=10, successful_requests=8, failed_requests=2, latencies_ms=[100.0])
     m.scenarios = {"baseline": "pass"}
     path = os.path.join(tempfile.mkdtemp(), "test.csv")
     m.write_csv(path)
     assert os.path.exists(path)
-    content = open(path).read()
+    with open(path) as f:
+        content = f.read()
     assert "scenario_baseline" in content
